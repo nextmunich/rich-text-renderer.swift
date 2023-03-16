@@ -4,7 +4,7 @@ platform :ios, '11.0'
 workspace 'RichTextRenderer.xcworkspace'
 
 target 'RichTextRenderer' do
-    pod 'AlamofireImage'
+    pod 'AlamofireImage', '~> 3'
     pod 'Contentful', '~> 5'
 end
 
