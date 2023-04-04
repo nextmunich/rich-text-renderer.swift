@@ -29,7 +29,13 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
 
     /// Document to be rendered.
     public var richTextDocument: RichTextDocument? {
-        didSet { renderDocumentIfNeeded() }
+        didSet {
+            guard richTextDocument != oldValue else { return }
+
+            invalidateLayout()
+            textView.text = String()
+            renderDocumentIfNeeded()
+        }
     }
 
     /// Storage for exclusion paths, regions where a text is not rendered in the text container.
@@ -164,7 +170,16 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
     }
 
     private func calculateAndSetPreferredContentSize() {
-        let newContentSize = textView.sizeThatFits(textView.bounds.size)
+        var newContentSize = textView.sizeThatFits(textView.bounds.size)
+
+        textView.attributedText.enumerateAttribute(.embed, in: textView.attributedText.fullRange) { value, _, _ in
+            guard let view = value as? UIView else {
+                return
+            }
+
+            newContentSize = CGSize(width: newContentSize.width, height: newContentSize.height + view.bounds.height)
+        }
+
         guard newContentSize != preferredContentSize else {
             return
         }
