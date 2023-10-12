@@ -157,7 +157,14 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
     private func renderDocumentIfNeeded() {
         guard let document = richTextDocument else { return }
 
-        DispatchQueue.main.async {
+        // ----->
+        // When using the renderer in SwiftUI, setting the preferred content size in an async dispatch can lead to
+        // SwiftUI having used the preferred content size already, when the queued change is made. In that case SwiftUI
+        // is not "aware" of the preferred content size having changed, hence will not render the content correctly.
+        //
+        // By disabling the async dispatch, SwiftUI has the right size available, when able to access it. Doing this
+        // with the content we are dealing with did not show any significant performance impact of a blocking execution.
+//        DispatchQueue.main.async {
             var output = self.renderer.render(document: document)
             if self.trimWhitespace {
                 output = output.trim()
@@ -166,7 +173,8 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
             self.textStorage.setAttributedString(output)
             self.textStorage.endEditing()
             self.calculateAndSetPreferredContentSize()
-        }
+//        }
+        // <-----
     }
 
     private func calculateAndSetPreferredContentSize() {
