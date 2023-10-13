@@ -88,6 +88,7 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
     }
 
     deinit {
+        textViewContentSizeKvoToken?.invalidate()
         stopObservingNotifications()
     }
 
@@ -117,6 +118,8 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
 
         textContainer.size.height = .greatestFiniteMagnitude
     }
+    
+    private var textViewContentSizeKvoToken: NSKeyValueObservation?
 
     private func setupTextView() {
         textView = UITextView(frame: view.bounds, textContainer: textContainer)
@@ -139,6 +142,24 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
             textView.isScrollEnabled = false
         }
         textView.isEditable = false
+        
+        // The layout and render process is taking place in multiple steps which run
+        // async: several blocks of code are dispatched on the main queue using the
+        // async() function. This will cause calculation of the preferredContentSize
+        // at the end of renderDocumentIfNeeded() to miss later changes.
+        // To ensure that we update the preferredContentSize to the final value when
+        // all layouting and rendering has completed, we observe the UITextView's
+        // contentSize for changes and update the preferredContentSize of the
+        // ViewController accordingly.
+        // NOTE: This will only work if the RichTextViewController has been initialized
+        // with isScrollEnabled: true. If UITextView is not scroll enabled, its
+        // contentSize will not be updated during the layouting and rendering process.
+        if isScrollEnabled {
+            textViewContentSizeKvoToken = textView.observe(\.contentSize, options: .new) { _, change in
+                guard let size = change.newValue else { return }
+                self.preferredContentSize = size
+            }
+        }
     }
 
     private func invalidateLayout() {
@@ -157,14 +178,7 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
     private func renderDocumentIfNeeded() {
         guard let document = richTextDocument else { return }
 
-        // ----->
-        // When using the renderer in SwiftUI, setting the preferred content size in an async dispatch can lead to
-        // SwiftUI having used the preferred content size already, when the queued change is made. In that case SwiftUI
-        // is not "aware" of the preferred content size having changed, hence will not render the content correctly.
-        //
-        // By disabling the async dispatch, SwiftUI has the right size available, when able to access it. Doing this
-        // with the content we are dealing with did not show any significant performance impact of a blocking execution.
-//        DispatchQueue.main.async {
+        DispatchQueue.main.async {
             var output = self.renderer.render(document: document)
             if self.trimWhitespace {
                 output = output.trim()
@@ -172,11 +186,21 @@ open class RichTextViewController: UIViewController, NSLayoutManagerDelegate {
             self.textStorage.beginEditing()
             self.textStorage.setAttributedString(output)
             self.textStorage.endEditing()
-            self.calculateAndSetPreferredContentSize()
-//        }
-        // <-----
+            
+            // If the RichTextViewController has been initialized with isScrollEnabled: true,
+            // a reliable solution for setting the preferredContentSize is to observe the
+            // UITextView's contentSize changes.
+            // If isScrollEnabled is false, we retain the previous logic. Since this logic has
+            // bugs and since it will cause the content to be "cut" before it ends, it will
+            // have to be replaced with a working solution. Since we do not need to use the
+            // RichTextViewController set to isScrollEnabled: false, we do not have to find a
+            // solution and retain the buggy implementation for now.
+            if !self.isScrollEnabled {
+                self.calculateAndSetPreferredContentSize()
+            }
+        }
     }
-
+    
     private func calculateAndSetPreferredContentSize() {
         var newContentSize = textView.sizeThatFits(textView.bounds.size)
 
