@@ -20,7 +20,7 @@ let package = Package(
         .package(
             name: "AlamofireImage",
             url: "https://github.com/Alamofire/AlamofireImage.git",
-            from: "3.6.0"
+            from: "4.3.0"
         )
     ],
     targets: [
